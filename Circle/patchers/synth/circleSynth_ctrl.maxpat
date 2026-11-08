@@ -1668,11 +1668,23 @@
                 "box": {
                     "id": "obj-3",
                     "maxclass": "newobj",
-                    "numinlets": 1,
+                    "numinlets": 2,
                     "numoutlets": 7,
                     "outlettype": [ "", "", "", "", "", "float", "" ],
                     "patching_rect": [ 244.89795684814453, 102.04081535339355, 112.0, 22.0 ],
                     "text": "circleSynth_Minilab"
+                }
+            },
+            {
+                "box": {
+                    "comment": "",
+                    "id": "obj-220",
+                    "index": 3,
+                    "maxclass": "inlet",
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 400.0, 6.0, 30.0, 30.0 ]
                 }
             }
         ],
@@ -2606,6 +2618,12 @@
                 "patchline": {
                     "destination": [ "obj-95", 0 ],
                     "source": [ "obj-98", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-220", 0 ],
+                    "destination": [ "obj-3", 1 ]
                 }
             }
         ]

@@ -1,4 +1,5 @@
 supporting_files/
+.venv/
 *.png
 *.mov
 *.mp4

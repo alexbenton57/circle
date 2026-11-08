@@ -135,3 +135,5 @@ In order:
 The immediate objective is a functional prototype that allows the physical interaction to be evaluated.
 
 Do not prematurely implement the eventual Raspberry Pi, MCU, encoder or galvanometer systems.
+
+## 9. Development Decisions for Surface App
