@@ -16,7 +16,7 @@ After each ticket, record files changed, key decisions, checks performed, and re
 
 ### Ticket 1 — Max host scaffold and protocol draft
 
-- **Result:** Completed this foundation scope. Added `Surface/circleApp_Surface.maxpat` as a separate copy of `Circle/extras/circleApp_cgsSynth.maxpat`; original host remains unchanged. Recorded a tentative UDP/OSC schema in `Surface/SPEC.md`: existing TUIO input on 3333, app keyboard notes on 3334 (`/circle/note`), and Max ready/features telemetry on 3335 (`/circle/ready`, `/circle/features`).
+- **Result:** Completed this foundation scope. Added `Circle/extras/circleApp_Surface.maxpat` as a separate copy of `Circle/extras/circleApp_cgsSynth.maxpat`; it is inside the repository's linked Max package, and the original host remains unchanged. Recorded a tentative UDP/OSC schema in `Surface/SPEC.md`: existing TUIO input on 3333, app keyboard notes on 3334 (`/circle/note`), and Max ready/features telemetry on 3335 (`/circle/ready`, `/circle/features`).
 - **Checks:** Confirmed the existing controller's TUIO input and feature signal buses by source inspection. No tests or Max runtime checks run for this ticket.
 - **Remaining:** Max receiver/sender objects are not wired; the proposed schema is not operational. Keyboard routing is Ticket 2 and feature conversion/serialization plus heartbeat are Ticket 3. Python aspect compensation is Ticket 4. Sound and real message exchange remain unverified.
 
@@ -52,7 +52,7 @@ After each ticket, record files changed, key decisions, checks performed, and re
 
 ### Ticket 6 — Surface Max ready heartbeat
 
-- **Result:** Added a load-started 500 ms `/circle/ready 1` OSC heartbeat from the Surface Max host to UDP 3335. Enabled readiness-gated sending in the app; while heartbeat is absent, local drawing remains available and outgoing Max input is paused.
+- **Result:** Added a load-started 500 ms `/circle/ready 1` OSC heartbeat from the Surface Max host to UDP 3335. After the live check showed the app received no heartbeat, simplified its Max route to send a normal `/circle/ready 1` Max message directly to `udpsend`, which encodes OSC. App sending remains readiness-gated.
 - **Checks:** Max host patch parses as JSON and the heartbeat object/connection chain is source-reviewed. No Max runtime check was run.
 - **Remaining:** Confirm heartbeat reception/loss detection, Max note/gesture exchange, and audible sound manually. Feature telemetry serialization remains unresolved.
 
@@ -61,4 +61,16 @@ After each ticket, record files changed, key decisions, checks performed, and re
 - **Result:** No patch changes. The controller exposes 90 channels, and the mapper splits them into five adjacent 18-channel groups. `mc.snapshot~` emits channel identifiers and values separately, but a reliable indexed/ordered packing route into the agreed 90-value OSC schema is not established from source alone.
 - **Checks:** Inspected controller and mapper signal routing and Cycling '74's `mc.snapshot~` reference. No Max runtime checks were run.
 - **Remaining:** Validate channel-indexed packing and message order in Max 9 before wiring `/circle/features`; otherwise the app could silently label the wrong values. Audible sound and the current heartbeat/input paths also remain for manual verification.
+
+### Ticket 8 — Indexed Max feature stream
+
+- **Result:** Added an optional 90-channel feature outlet to the shared controller and connected it only in the Surface host to `mc.snapshot~ 100`. The host emits each channel as `/circle/feature (channel, value)` on UDP 3335. Channel IDs are explicit, so assembly does not depend on list order. Heartbeat remains a direct `/circle/ready 1` message to `udpsend`.
+- **Checks:** Reviewed outlet and host wiring; both Max patch files parse as JSON. The repo's feature scope already uses `route voice`, and Cycling '74 documents `mc.snapshot~` channel identifiers before each sample. No Max runtime check was run.
+- **Remaining:** Python must assemble all 90 indexed samples into the five 18-value groups. Max telemetry output still needs live validation.
+
+### Ticket 9 — Python indexed feature assembly
+
+- **Result:** The transport now accepts `/circle/feature (channel, value)` messages, validates channel IDs 1–90 and finite numeric values, and assembles the five groups by channel index. It calls the UI callback only after a full 90-channel sample set; a repeated ID discards an incomplete frame. The user has confirmed the app produces sound through Max.
+- **Checks:** Source-reviewed packet parsing and the frame assembler. No tests were run.
+- **Remaining:** Reload the updated Surface host in Max and confirm live feature packets reach the app. Verify displayed group/readout values against Max's scopes; heartbeat loss detection and Surface touch behavior also need manual checks.
 

@@ -101,6 +101,50 @@ class FeatureTelemetry:
         return max(self.groups, key=lambda group: group.energy, default=None)
 
 
+class FeatureAssembler:
+    """Build five 18-value groups from channel-indexed Max snapshots.
+
+    The index is 1-based and identifies a fixed feature channel, so arrival
+    order is irrelevant. Repeated indices mark a new snapshot frame; this lets
+    the assembler discard a partial frame if a UDP datagram was lost.
+    """
+
+    CHANNEL_COUNT = 90
+    GROUP_WIDTH = 18
+
+    def __init__(self) -> None:
+        self._values = [0.0] * self.CHANNEL_COUNT
+        self._seen: set[int] = set()
+
+    def add(self, channel: int, value: int | float) -> FeatureTelemetry | None:
+        if isinstance(channel, bool) or not isinstance(channel, int):
+            raise ValueError("/circle/feature channel must be an integer")
+        if not 1 <= channel <= self.CHANNEL_COUNT:
+            raise ValueError("/circle/feature channel must be between 1 and 90")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("/circle/feature value must be numeric")
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError("/circle/feature value must be finite")
+
+        index = channel - 1
+        if index in self._seen:
+            # The channel is being sampled again before this frame was whole.
+            self._seen.clear()
+        self._values[index] = value
+        self._seen.add(index)
+
+        if len(self._seen) < self.CHANNEL_COUNT:
+            return None
+
+        groups = []
+        for start in range(0, self.CHANNEL_COUNT, self.GROUP_WIDTH):
+            f = self._values[start : start + self.GROUP_WIDTH]
+            groups.append(FeatureGroup(f[0], f[1], f[2], f[3], f[4], f[5], tuple(f[6:12]), tuple(f[12:18])))
+        self._seen.clear()
+        return FeatureTelemetry(tuple(groups))
+
+
 def parse_telemetry(address: str, args: tuple[int | float | str, ...]) -> bool | FeatureTelemetry:
     """Parse the proposed /circle/ready and /circle/features messages."""
     if address == "/circle/ready":
@@ -145,6 +189,7 @@ class MaxTransport:
         self._require_ready = require_ready
         self._on_ready = on_ready
         self._on_features = on_features
+        self._feature_assembler = FeatureAssembler()
         self._tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._rx.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -220,14 +265,19 @@ class MaxTransport:
                 break
             try:
                 address, args = decode_osc(packet)
-                result = parse_telemetry(address, args)
+                if address == "/circle/feature":
+                    if len(args) != 2:
+                        raise ValueError("/circle/feature expects channel and value")
+                    result = self._feature_assembler.add(args[0], args[1])
+                else:
+                    result = parse_telemetry(address, args)
             except (ValueError, UnicodeError, struct.error):
                 continue
             if isinstance(result, bool):
                 self._last_heartbeat = time.monotonic()
                 self._ready = result
                 self._update_ready()
-            elif self._on_features is not None:
+            elif isinstance(result, FeatureTelemetry) and self._on_features is not None:
                 self._on_features(result)
 
     def _update_ready(self) -> None:

@@ -595,6 +595,17 @@
             },
             {
                 "box": {
+                    "comment": "",
+                    "id": "obj-221",
+                    "index": 8,
+                    "maxclass": "outlet",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 770.0, 1161.0, 30.0, 30.0 ]
+                }
+            },
+            {
+                "box": {
                     "id": "obj-211",
                     "maxclass": "comment",
                     "numinlets": 1,
@@ -1911,6 +1922,12 @@
             {
                 "patchline": {
                     "destination": [ "obj-143", 0 ],
+                    "source": [ "obj-161", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-221", 0 ],
                     "source": [ "obj-161", 0 ]
                 }
             },

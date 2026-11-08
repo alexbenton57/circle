@@ -1,5 +1,6 @@
 supporting_files/
 .venv/
+__pycache__/
 *.png
 *.mov
 *.mp4
