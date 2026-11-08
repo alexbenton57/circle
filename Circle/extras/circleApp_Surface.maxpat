@@ -367,7 +367,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
                     "patching_rect": [ 360.0, 245.0, 100.0, 22.0 ],
-                    "text": "mc.snapshot~ 100"
+                    "text": "mc.snapshot~ 500"
                 }
             },
             {
@@ -423,6 +423,16 @@
                     "outlettype": [ "" ],
                     "patching_rect": [ 600.0, 335.0, 160.0, 22.0 ],
                     "text": "prepend /circle/feature"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-30",
+                    "maxclass": "newobj",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 345.0, 62.0, 145.0, 22.0 ],
+                    "text": "print surface-note-route"
                 }
             }
         ],
@@ -681,6 +691,18 @@
                     "destination": [
                         "obj-2",
                         2
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-17",
+                        0
+                    ],
+                    "destination": [
+                        "obj-30",
+                        0
                     ]
                 }
             },

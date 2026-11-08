@@ -200,6 +200,12 @@ class MaxTransport:
         self._ready = False
         self._last_heartbeat = 0.0
         self._sequence = 0
+        self._position_packets_sent = 0
+
+    @property
+    def position_packets_sent(self) -> int:
+        """Total successful outgoing position datagrams since startup."""
+        return self._position_packets_sent
 
     @property
     def ready(self) -> bool:
@@ -220,6 +226,7 @@ class MaxTransport:
             encode_osc("/tuio/2Dcur", "fseq", self._sequence),
         )
         self._tx.sendto(packet, self._destination)
+        self._position_packets_sent += 1
 
     def end_gesture(self) -> None:
         """Send a TUIO cursor frame that releases the app's active session."""

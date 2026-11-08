@@ -6,19 +6,24 @@ Run from the repository root with ``python -m Surface.app``.
 from __future__ import annotations
 
 import sys
+import time
 from typing import Any
 
-from PySide6.QtCore import QEvent, QPointF, Qt, Signal, QObject
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QEvent, QPointF, Qt, Signal, QObject, QTimer
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QSizePolicy,
+    QVBoxLayout,
     QWidget,
 )
 
 from .input_model import GestureInput, GesturePoint, LatchedKeyboard
+from .cgs_plot import curve_points
 from .transport import FeatureTelemetry, MaxTransport
 
 
@@ -36,7 +41,13 @@ class GestureCanvas(QWidget):
         super().__init__()
         self.transport = transport
         self.gesture = GestureInput(self._point_received)
-        self.trace: list[QPointF] = []
+        self._trace_image = QImage(1, 1, QImage.Format.Format_ARGB32_Premultiplied)
+        self._trace_image.fill(Qt.GlobalColor.transparent)
+        self._last_trace_pixel: QPointF | None = None
+        self.show_raw_curve = True
+        self.show_cgs_curve = False
+        self._cgs_curve_path = QPainterPath()
+        self._cgs_curve_points: tuple[tuple[float, float], ...] = ()
         self.last_xy: GesturePoint | None = None
         self.max_status = "Waiting for Max heartbeat"
         self.gesture_status = "Gesture idle"
@@ -49,22 +60,57 @@ class GestureCanvas(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def _point_received(self, point: GesturePoint) -> None:
+        width, height = self.width(), self.height()
+        # Preserve every input sample on the Max path before doing UI work.
+        self.transport.send_gesture(point, width, height)
         self.last_xy = point
-        self.trace.append(QPointF(point.x * self.width(), point.y * self.height()))
-        self.transport.send_gesture(point, self.width(), self.height())
+        self._ensure_trace_size(width, height)
+        pixel = QPointF(point.x * width, point.y * height)
+        painter = QPainter(self._trace_image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#54d6c8"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        if self._last_trace_pixel is not None:
+            painter.drawLine(self._last_trace_pixel, pixel)
+        painter.end()
+        self._last_trace_pixel = pixel
         self.update()
 
     def _begin(self, pointer: object, pos: QPointF) -> bool:
+        if self.gesture.active or self.width() <= 0 or self.height() <= 0:
+            return False
+        self._clear_trace()
         if not self.gesture.begin(pointer, pos.x(), pos.y(), self.width(), self.height()):
             return False
         self.gesture_status = "Gesture active"
         self._pointer = pointer
-        self.trace.clear()
-        # begin() emits before trace.clear(); restore its first sample.
-        if self.last_xy is not None:
-            self.trace.append(QPointF(self.last_xy.x * self.width(), self.last_xy.y * self.height()))
         self.update()
         return True
+
+    def _clear_trace(self) -> None:
+        self._trace_image.fill(Qt.GlobalColor.transparent)
+        self._last_trace_pixel = None
+
+    def _ensure_trace_size(self, width: int, height: int) -> None:
+        width, height = max(1, width), max(1, height)
+        if self._trace_image.width() == width and self._trace_image.height() == height:
+            return
+        old_width, old_height = self._trace_image.width(), self._trace_image.height()
+        self._trace_image = self._trace_image.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+        if self._last_trace_pixel is not None:
+            self._last_trace_pixel = QPointF(
+                self._last_trace_pixel.x() * width / old_width,
+                self._last_trace_pixel.y() * height / old_height,
+            )
+
+    def resizeEvent(self, event: Any) -> None:
+        super().resizeEvent(event)
+        self._ensure_trace_size(self.width(), self.height())
+        self._rebuild_cgs_path()
 
     def _move(self, pointer: object, pos: QPointF) -> bool:
         return self.gesture.move(pointer, pos.x(), pos.y(), self.width(), self.height())
@@ -136,6 +182,7 @@ class GestureCanvas(QWidget):
         group = telemetry.active_group
         if group is None:
             self.telemetry = "No active feature group"
+            self.set_cgs_curve(())
         else:
             low = ", ".join(f"{v:.3g}" for v in group.low)
             high = ", ".join(f"{v:.3g}" for v in group.high)
@@ -144,7 +191,56 @@ class GestureCanvas(QWidget):
                 f"Asum {group.asum:.3g}   Abal {group.abal:.3g}   Phi {group.phi:.3g}\n"
                 f"Low [{low}]\nHigh [{high}]"
             )
+            self.set_cgs_curve(curve_points(group))
         self.update()
+
+    def set_show_raw_curve(self, visible: bool) -> None:
+        self.show_raw_curve = visible
+        self.update()
+
+    def set_show_cgs_curve(self, visible: bool) -> None:
+        self.show_cgs_curve = visible
+        self.update()
+
+    def set_cgs_curve(self, points: Any) -> None:
+        """Set world-coordinate points for the display-only CGS curve."""
+        self._cgs_curve_points = tuple((float(x), float(y)) for x, y in points)
+        self._rebuild_cgs_path()
+        self.update()
+
+    def _rebuild_cgs_path(self) -> None:
+        """Fit the current world-coordinate curve with equal pixel scale."""
+        path = QPainterPath()
+        points = self._cgs_curve_points
+        if len(points) < 2 or self.width() <= 0 or self.height() <= 0:
+            self._cgs_curve_path = path
+            return
+
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        span_x, span_y = x_max - x_min, y_max - y_min
+        if span_x < 1e-12 and span_y < 1e-12:
+            self._cgs_curve_path = path
+            return
+        span_x = max(span_x, 1e-12)
+        span_y = max(span_y, 1e-12)
+        margin = 0.10
+        pixels_per_unit = min(
+            self.width() * (1.0 - 2.0 * margin) / span_x,
+            self.height() * (1.0 - 2.0 * margin) / span_y,
+        )
+        center_x = (x_min + x_max) / 2.0
+        center_y = (y_min + y_max) / 2.0
+        for index, (x, y) in enumerate(points):
+            nx = 0.5 + (x - center_x) * pixels_per_unit / self.width()
+            ny = 0.5 - (y - center_y) * pixels_per_unit / self.height()
+            if index == 0:
+                path.moveTo(nx, ny)
+            else:
+                path.lineTo(nx, ny)
+        self._cgs_curve_path = path
 
     def paintEvent(self, _event: Any) -> None:
         painter = QPainter(self)
@@ -153,15 +249,16 @@ class GestureCanvas(QWidget):
         painter.setPen(QPen(QColor("#49545f"), 1))
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
 
-        if len(self.trace) >= 2:
-            path = QPainterPath(self.trace[0])
-            for point in self.trace[1:]:
-                path.lineTo(point)
-            painter.setPen(QPen(QColor("#54d6c8"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-            painter.drawPath(path)
-        if self.trace:
+        if self.show_raw_curve and not self._trace_image.isNull():
+            painter.drawImage(self.rect(), self._trace_image)
+        if self.show_raw_curve and self._last_trace_pixel is not None:
             painter.setPen(QPen(QColor("#f0c674"), 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            painter.drawPoint(self.trace[-1])
+            painter.drawPoint(self._last_trace_pixel)
+        if self.show_cgs_curve and self._cgs_curve_path.elementCount() > 1:
+            cgs_pen = QPen(QColor("#f0c674"), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(cgs_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(self._cgs_curve_path)
 
         overlay = self.rect().adjusted(14, 14, -14, -14)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -262,25 +359,65 @@ class SurfaceWindow(QMainWindow):
             on_ready=self.signals.ready.emit,
             on_features=self.signals.features.emit,
         )
-        self.transport.start()
         self.signals.ready.connect(self._on_ready)
         self.signals.features.connect(self._on_features)
         self._last_ready = False
         self.keyboard_model = LatchedKeyboard(self.transport.send_note)
 
         root = QWidget()
-        layout = QHBoxLayout(root)
+        layout = QVBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        status_bar = QWidget()
+        status_layout = QHBoxLayout(status_bar)
+        status_layout.setContentsMargins(10, 4, 10, 4)
+        status_layout.setSpacing(12)
+        self.raw_toggle = QCheckBox("Raw")
+        self.raw_toggle.setChecked(True)
+        self.cgs_toggle = QCheckBox("CGS")
+        self.max_status_label = QLabel("Waiting for Max heartbeat")
+        self.position_rate_label = QLabel("Position packets: 0/s")
+        status_layout.addWidget(self.raw_toggle)
+        status_layout.addWidget(self.cgs_toggle)
+        status_layout.addStretch(1)
+        status_layout.addWidget(self.max_status_label)
+        status_layout.addWidget(self.position_rate_label)
+        layout.addWidget(status_bar)
+
+        content = QWidget()
+        content_layout = QHBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
         self.keyboard = RotatedKeyboard(self.keyboard_model)
         self.canvas = GestureCanvas(self.transport)
-        layout.addWidget(self.keyboard)
-        layout.addWidget(self.canvas, 1)
+        self.raw_toggle.toggled.connect(self.canvas.set_show_raw_curve)
+        self.cgs_toggle.toggled.connect(self.canvas.set_show_cgs_curve)
+        content_layout.addWidget(self.keyboard)
+        content_layout.addWidget(self.canvas, 1)
+        layout.addWidget(content, 1)
         self.setCentralWidget(root)
         self.setMinimumSize(900, 600)
 
+        self._rate_count = self.transport.position_packets_sent
+        self._rate_time = time.monotonic()
+        self._rate_timer = QTimer(self)
+        self._rate_timer.setInterval(500)
+        self._rate_timer.timeout.connect(self._update_position_rate)
+        self._rate_timer.start()
+        self.transport.start()
+
+    def _update_position_rate(self) -> None:
+        now = time.monotonic()
+        count = self.transport.position_packets_sent
+        elapsed = max(now - self._rate_time, 1e-6)
+        rate = (count - self._rate_count) / elapsed
+        self._rate_count = count
+        self._rate_time = now
+        self.position_rate_label.setText(f"Position packets: {rate:.0f}/s")
+
     def _on_ready(self, ready: bool) -> None:
         self.canvas.set_ready(ready)
+        self.max_status_label.setText("Max ready" if ready else "Max unavailable")
         if self._last_ready and not ready and self.keyboard_model.active_pitch is not None:
             self.keyboard_model.stop()
             self.keyboard.update()

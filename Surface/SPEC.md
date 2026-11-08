@@ -8,9 +8,10 @@ Build a Windows application in Python with PySide6 for the Surface Pro 4. It rep
 
 - The gesture area accepts Surface touch, Surface Pen, and mouse click-and-drag for laptop development. Gesture processing is independent of the input device. Only one gesture pointer may be active; ignore additional pointers until the active one lifts.
 - Gesture position is sent continuously from pointer down through release, without added smoothing. The app displays the normalized XY position it sends to Max.
+- The top status bar shows the measured rate of successfully sent position packets. Raw input tracing and the derived CGS curve have independent visibility toggles.
 - The on-screen keyboard is one octave, C4–B4 (MIDI pitches 60–71), monophonic, and latching. Pressing the active key stops its note; pressing another key replaces it. The app sends MIDI-style pitch and velocity values to Max (velocity 100 on, 0 off; bend fixed at zero) for routing into existing note handling. Pitch bend and pedal controls are not required initially.
-- CGL calculations remain in Max. The app displays telemetry for Max's active `Wr` and its associated feature group. The initial telemetry schema can be designed without Matt's approval; coordinate any patch changes with him.
-- The raw traced curve may be plotted from the same input samples as a stretch goal. If plotted, retain the last trace after release until the next gesture. This is separate from the later derived two-ellipse curve overlay.
+- CGL feature extraction, analysis, and sound control remain in Max. Python may reconstruct a theoretical two-ellipse curve from Max-derived telemetry for visualization only; that rendering calculation has no effect on sound or the Max CGL signal. Keep the renderer independent of the input device so a future galvanometer path can provide equivalent feature data.
+- The raw traced curve is plotted from input samples and retained after release until the next gesture. It can be hidden independently from the derived two-ellipse CGS curve, which is reconstructed from Max feature telemetry for display only.
 - The landscape layout places the rotated keyboard at the left edge, with its front edge against that edge. The gesture area occupies the remaining area at full screen height; readouts remain compact.
 
 ## Proposed integration
@@ -37,12 +38,14 @@ Update the displayed parameters live during a gesture. On release, retain the la
 | `omega0` | `W0 / Wr`; Max's extractor labels the higher frequency `W0`, while the plotter uses `omega0` for the lower frequency |
 | `A0` | `Asum / 2` |
 | `Ar` | `2 * Abal - 1` |
-| `S1`, `tau1` | Invert the low-frequency ellipse's six Cartesian shape values with `cartToTauS` |
-| `S2`, `tau2` | Invert the high-frequency ellipse's six Cartesian shape values with `cartToTauS` |
+| `S1`, `tau1` | Invert the low-frequency ellipse's six Cartesian shape values with `cartToTauS` for display reconstruction |
+| `S2`, `tau2` | Invert the high-frequency ellipse's six Cartesian shape values with `cartToTauS` for display reconstruction |
 | `phi` | `Phi`, with phase wrapping/sign convention to be checked against a known synthetic gesture |
 | — | `E` has no corresponding plotter slider; it may be retained as a diagnostic if useful |
 
 The phase and frequency conventions must be validated against a known synthetic gesture before treating the readouts as exact. The inverse shape conversion is unstable for `tau` near a perfect circle; the Cartesian values themselves remain well-behaved, but the UI should treat `tau` as immaterial near `|S| = 1`.
+
+The CGS curve is reconstructed for display in Python using the plotter's Model A ellipse equations and the selected highest-energy Max feature group. It is centered and fitted to the canvas with equal pixel scale. This renderer does not feed Max or perform CGL feature extraction. `Raw` and `CGS` visibility are controlled independently.
 
 ## First milestone
 
@@ -66,6 +69,6 @@ Surface touch latency and tracking quality require manual evaluation on the Surf
 
 ## Surface Max bridge (Ticket 1)
 
-The Surface host is a separate copy of `Circle/extras/circleApp_cgsSynth.maxpat` at `Circle/extras/circleApp_Surface.maxpat`, inside the repository's linked Max package; the original host remains the reference and is unchanged. The existing gesture input remains TUIO on UDP 3333. UDP OSC bridge: app to Max on 3334, `/circle/note` with `(pitch, velocity)`; Max to app on 3335, `/circle/ready 1` heartbeat and repeated `/circle/feature` messages with `(channel, value)`. Feature channels are numbered 1–90: five adjacent groups of 18 in configured ratio order `1, 1.5, 2, 3, 4`, each group containing `Wr, E, W0, Asum, Abal, Phi, low[6], high[6]`. Python assembles a complete channel set by index before updating the readout, so message arrival order does not define feature order. Max samples at 100 ms intervals.
+The Surface host is a separate copy of `Circle/extras/circleApp_cgsSynth.maxpat` at `Circle/extras/circleApp_Surface.maxpat`, inside the repository's linked Max package; the original host remains the reference and is unchanged. The existing gesture input remains TUIO on UDP 3333. UDP OSC bridge: app to Max on 3334, `/circle/note` with `(pitch, velocity)`; Max to app on 3335, `/circle/ready 1` heartbeat and repeated `/circle/feature` messages with `(channel, value)`. Feature channels are numbered 1–90: five adjacent groups of 18 in configured ratio order `1, 1.5, 2, 3, 4`, each group containing `Wr, E, W0, Asum, Abal, Phi, low[6], high[6]`. Python assembles a complete channel set by index before updating the readout, so message arrival order does not define feature order. Max samples at 500 ms intervals to keep readout traffic modest.
 
 The keyboard OSC route is wired through the Surface host and existing note manager; the user has confirmed audible output. The Surface host sends `/circle/ready 1` to local UDP 3335 every 500 ms. The indexed feature telemetry path is wired in Max and Python, pending live validation. Keep X direct and compensate the app's TUIO Y values so the existing Max transform produces gesture-canvas height/width scaling. For canvas-normalized `y_canvas`, height `H`, and width `W`, send `y_tuio = 1 - (1 - y_canvas) * (H / W) / 1.42`.

@@ -64,7 +64,7 @@ After each ticket, record files changed, key decisions, checks performed, and re
 
 ### Ticket 8 — Indexed Max feature stream
 
-- **Result:** Added an optional 90-channel feature outlet to the shared controller and connected it only in the Surface host to `mc.snapshot~ 100`. The host emits each channel as `/circle/feature (channel, value)` on UDP 3335. Channel IDs are explicit, so assembly does not depend on list order. Heartbeat remains a direct `/circle/ready 1` message to `udpsend`.
+- **Result:** Added an optional ninth 90-channel feature outlet to the shared controller and connected it only in the Surface host to `mc.snapshot~ 500`. The host emits each channel as `/circle/feature (channel, value)` on UDP 3335. Channel IDs are explicit, so assembly does not depend on list order. A duplicate Max outlet index was found during live diagnosis and corrected to index 9. Heartbeat remains a direct `/circle/ready 1` message to `udpsend`.
 - **Checks:** Reviewed outlet and host wiring; both Max patch files parse as JSON. The repo's feature scope already uses `route voice`, and Cycling '74 documents `mc.snapshot~` channel identifiers before each sample. No Max runtime check was run.
 - **Remaining:** Python must assemble all 90 indexed samples into the five 18-value groups. Max telemetry output still needs live validation.
 
@@ -73,4 +73,32 @@ After each ticket, record files changed, key decisions, checks performed, and re
 - **Result:** The transport now accepts `/circle/feature (channel, value)` messages, validates channel IDs 1–90 and finite numeric values, and assembles the five groups by channel index. It calls the UI callback only after a full 90-channel sample set; a repeated ID discards an incomplete frame. The user has confirmed the app produces sound through Max.
 - **Checks:** Source-reviewed packet parsing and the frame assembler. No tests were run.
 - **Remaining:** Reload the updated Surface host in Max and confirm live feature packets reach the app. Verify displayed group/readout values against Max's scopes; heartbeat loss detection and Surface touch behavior also need manual checks.
+
+### Ticket 10 — Long-gesture input throughput
+
+- **Finding:** The canvas retained every point in a Python list and rebuilt a full `QPainterPath` from that list on every repaint. Total path-building work therefore grew roughly quadratically over a long gesture, delaying UI input handling and UDP sends. Per-sample OSC/network work was constant-size.
+- **Result:** Replaced the growing list/path rebuild with a fixed-size `QImage` trace canvas updated only for each newest segment. The image is blitted on repaint, retained after release, and cleared for the next gesture. Each normalized sample is sent to Max before trace rendering; the Max data path still sends every sample without throttling, smoothing, or decimation. Reduced feature snapshots from 10 Hz to 2 Hz, keeping telemetry traffic to 180 indexed packets/second.
+- **Checks:** Source review confirms no duration-growing trace loop remains and the UDP send precedes image drawing. No tests or timing measurements were run.
+- **Remaining:** Restart the Python app and test a one-minute Surface stylus gesture while monitoring Max input rate. If the rate still declines, measure the per-sample TUIO/Max processing path next.
+
+### Ticket 11 — Position rate and plot visibility controls
+
+- **Result:** Added a top-bar position-packet rate, updated every 500 ms from successful UDP sends, plus independent Raw (on by default) and CGS (off by default) toggles. The canvas accepts normalized CGS points and draws them separately; it does not compute the CGS curve.
+- **Checks:** Source review confirms rate counting is outside the UI refresh loop and all gesture sends remain unchanged. No tests were run.
+- **Remaining:** Connect the CGS renderer to Max telemetry; source choice is settled as Python display reconstruction from Max-derived feature data.
+
+### Ticket 12 — Display-only CGS curve reconstruction
+
+- **Result:** Added a separate standard-library renderer that maps the selected highest-energy Max feature group through the plotter's Model A two-ellipse equations, including Cartesian shape inversion from the repository's `cartToTauS` definition. The app fits returned world-coordinate points into the canvas with equal pixel scale and updates the CGS plot from telemetry. Raw and CGS toggles stay independent. No curve coordinates are sent back to Max.
+- **Checks:** Reviewed mapping against `2Ellipse_plotter.py`, `circle_core_TauSCart.genexpr`, and the agreed feature layout. No tests or runtime checks were run. Phase convention remains unverified against synthetic data.
+- **Remaining:** Reload Max/app and validate the CGS curve visually against a known synthetic gesture. Verify the plotter's phase/frequency convention and the look on Surface. Python renderer remains display-only; Max still controls CGL analysis and sound.
+
+### Ticket 13 — Max note-route diagnostics
+
+- **Result:** Added temporary Max console taps after the Surface `/circle/note` route and after the Minilab `unpack`, logging the incoming list and its pitch/velocity atoms independently.
+- **Checks:** Both edited Max patch files parse as JSON. No Max runtime check has been run.
+- **Runtime finding:** The route receives expected pitch/velocity lists, and `unpack` emits expected scalar values. Disconnecting the velocity-to-Gen cable removes the error but also prevents sound.
+- **Result:** Changed the note input unpack to float outlets, matching the existing Minilab MIDI path's `flonum` values. During follow-up inspection, found that the pitch-to-Gen cable had been left disconnected; restored it. Diagnostic taps remain.
+- **Checks:** Max patch files parse as JSON; both pitch and velocity outlets are wired to the note-manager Gen inputs in the repository copy. Max runtime retest pending.
+- **Remaining:** Reload the Minilab abstraction and test notes. If sound works, remove the temporary diagnostic taps; if not, continue tracing note-manager output to the synth engine.
 
