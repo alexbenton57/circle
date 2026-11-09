@@ -4,3 +4,5 @@ __pycache__/
 *.png
 *.mov
 *.mp4
+*.pyc
+MaxMSP-MCP-Server/
