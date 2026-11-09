@@ -137,3 +137,5 @@ The immediate objective is a functional prototype that allows the physical inter
 Do not prematurely implement the eventual Raspberry Pi, MCU, encoder or galvanometer systems.
 
 ## 9. Development Decisions for Surface App
+
+The Surface sound milestone uses a one-way app-to-Max bridge. The Surface host keeps the existing cgsSynth CGL, mapping, and audio chain; TUIO gestures use UDP 3333 and keyboard events use OSC `/circle/note (pitch, velocity)` on UDP 3334. Max unpacks pitch and velocity into separate float inputs for the existing note manager. The Surface host disables Minilab MIDI, pad, CC, and bend inputs. No Max-to-Surface telemetry or heartbeat is part of this milestone. The app's `REQUIRE_MAX_HANDSHAKE` switch is disabled by default and can be enabled when a Max ready heartbeat is restored.

@@ -1668,11 +1668,47 @@
                 "box": {
                     "id": "obj-3",
                     "maxclass": "newobj",
-                    "numinlets": 1,
+                    "numinlets": 4,
                     "numoutlets": 7,
                     "outlettype": [ "", "", "", "", "", "float", "" ],
                     "patching_rect": [ 244.89795684814453, 102.04081535339355, 112.0, 22.0 ],
                     "text": "circleSynth_Minilab"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-219",
+                    "maxclass": "inlet",
+                    "index": 3,
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [ "float" ],
+                    "patching_rect": [ 412.0, 12.0, 30.0, 30.0 ],
+                    "comment": "Surface pitch float"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-220",
+                    "maxclass": "inlet",
+                    "index": 4,
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [ "float" ],
+                    "patching_rect": [ 460.0, 12.0, 30.0, 30.0 ],
+                    "comment": "Surface velocity float"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-221",
+                    "maxclass": "inlet",
+                    "index": 5,
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [ "int" ],
+                    "patching_rect": [ 508.0, 12.0, 30.0, 30.0 ],
+                    "comment": "Surface mode: 1 disables external MIDI controls"
                 }
             }
         ],
@@ -2606,6 +2642,24 @@
                 "patchline": {
                     "destination": [ "obj-95", 0 ],
                     "source": [ "obj-98", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-219", 0 ],
+                    "destination": [ "obj-3", 1 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-220", 0 ],
+                    "destination": [ "obj-3", 2 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-221", 0 ],
+                    "destination": [ "obj-3", 3 ]
                 }
             }
         ]

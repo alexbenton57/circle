@@ -20,17 +20,16 @@ Build a Windows application in Python with PySide6 for the Surface Pro 4. It rep
 - Reuse the synth controller's existing TUIO input on UDP port 3333 for XY gesture data.
 - Coordinate mapping needs to account for the existing cgsSynth transform: X uses the TUIO X value directly, while Y is inverted and multiplied by 1.42. The Python TUIO adapter will compensate using the gesture area's aspect ratio so equal screen distances map to equal XY distances in Max. Keep the existing cgsSynth transform unchanged.
 - Add a small message path from the app to Max for keyboard note events, avoiding virtual MIDI routing software. Max routes these events into its existing note handling.
-- Add a small telemetry path from Max to the app for the active ratio and associated feature values. Max remains authoritative for these values.
-- Max and the Surface host patch are started manually for the first milestone. The app does not launch Max; it shows a waiting/disconnected state and keeps listening for telemetry so it becomes ready when Max is available.
-- Max sends a low-rate ready heartbeat even while idle. The app uses it to show Max's status and detect a lost connection.
-- If Max disconnects, the app keeps local gesture drawing available, drops outgoing events without queuing them for replay, and clears the latched keyboard key. It resumes sending fresh events after Max is ready again.
+- The first sound milestone is one-way: Max does not send telemetry or a ready heartbeat to the app. Telemetry readouts and the derived-curve overlay remain inactive until a later return-stream milestone.
+- Max and the Surface host patch are started manually. The app does not launch Max and sends events without waiting for a reply. Events sent while Max is closed are dropped by UDP and are not queued.
+- `Surface/app.py` has a `REQUIRE_MAX_HANDSHAKE` switch, disabled for the one-way milestone. Enable it only after Max sends the expected `/circle/ready` heartbeat again.
 - Keep transport code separate from gesture processing and UI code so future mechanical XY input can use the same processing and Max communication components.
 
 ## CGL telemetry to plotter-style readouts
 
-The app should display parameters in the style of `2Ellipse_plotter.py`. For the initial Surface prototype, preserve cgsSynth's configured `ratiosOfInterest` set: `1, 1.5, 2, 3, 4`; denominator-3 ratios are out of scope. Max's feature extractor creates an 18-value group per `Wr`: `E`, `Wr`, `W0`, `Asum`, `Abal`, `Phi`, then six Cartesian shape values for each of the low- and high-frequency ellipses. Max should convert all configured groups for telemetry, retaining `E` so the UI can select the highest-energy group initially and support displaying multiple groups later. CGL analysis and its parameter conversion remain in Max.
+The app can display parameters in the style of `2Ellipse_plotter.py` after a future Max-to-Surface telemetry stream is agreed and implemented. For that later work, preserve cgsSynth's configured `ratiosOfInterest` set: `1, 1.5, 2, 3, 4`; denominator-3 ratios are out of scope. Max's feature extractor creates an 18-value group per `Wr`: `E`, `Wr`, `W0`, `Asum`, `Abal`, `Phi`, then six Cartesian shape values for each of the low- and high-frequency ellipses. CGL analysis and its parameter conversion remain in Max.
 
-Update the displayed parameters live during a gesture. On release, retain the last valid set and mark the gesture idle; replace it as the next gesture produces valid parameters.
+When telemetry is added later, update displayed parameters live during a gesture. On release, retain the last valid set and mark the gesture idle; replace it as the next gesture produces valid parameters.
 
 | Plotter parameter | Mapping from active Max feature group |
 |---|---|
@@ -45,18 +44,18 @@ Update the displayed parameters live during a gesture. On release, retain the la
 
 The phase and frequency conventions must be validated against a known synthetic gesture before treating the readouts as exact. The inverse shape conversion is unstable for `tau` near a perfect circle; the Cartesian values themselves remain well-behaved, but the UI should treat `tau` as immaterial near `|S| = 1`.
 
-The CGS curve is reconstructed for display in Python using the plotter's Model A ellipse equations and the selected highest-energy Max feature group. It is centered and fitted to the canvas with equal pixel scale. This renderer does not feed Max or perform CGL feature extraction. `Raw` and `CGS` visibility are controlled independently.
+The CGS curve can be reconstructed for display in Python using the plotter's Model A ellipse equations and the selected highest-energy Max feature group once telemetry is available. It is centered and fitted to the canvas with equal pixel scale. This renderer does not feed Max or perform CGL feature extraction. `Raw` and `CGS` visibility are controlled independently.
 
 ## First milestone
 
-Create a minimal working vertical slice proving the riskiest integrations: responsive gesture input to Max, keyboard events to Max, and Max telemetry back to the app. Include the agreed basic layout and XY readout. Raw trace plotting is optional if the integration work is complete; the derived ellipse overlay and UI polish are out of scope.
+Create a minimal working vertical slice proving responsive gesture input and keyboard events from the app to Max, with audible output. Include the agreed basic layout and XY readout. Max-to-Surface telemetry, the derived ellipse overlay, and UI polish are out of scope.
 
 The first milestone must be capable of sending gesture and pitch inputs and producing sound.
 
 ## Acceptance criteria
 
 - On the laptop, the app sends live gesture positions through Max's existing TUIO path and Max responds with sound.
-- The app displays the normalized XY values it sends and receives the active `Wr` and feature telemetry from Max.
+- The app displays the normalized XY values it sends. Max-to-Surface telemetry is not part of this milestone.
 - The C4–B4 keyboard follows the agreed latch and replacement behaviour, and app shutdown does not leave a note sounding.
 - Mouse input works during laptop development. Touch and pen input are checked on the Surface.
 - The raw trace is plotted only if the core integrations are working; if included, it remains visible after release until replaced by the next gesture.
@@ -67,8 +66,8 @@ Max 9 is installed. The repo's `Circle` package is linked from `C:\Users\alexb\O
 
 Surface touch latency and tracking quality require manual evaluation on the Surface Pro 4. Initial keyboard and telemetry schemas may be designed without Matt's approval; any necessary Max patch changes should be coordinated with him.
 
-## Surface Max bridge (Ticket 1)
+## Surface Max bridge
 
-The Surface host is a separate copy of `Circle/extras/circleApp_cgsSynth.maxpat` at `Circle/extras/circleApp_Surface.maxpat`, inside the repository's linked Max package; the original host remains the reference and is unchanged. The existing gesture input remains TUIO on UDP 3333. UDP OSC bridge: app to Max on 3334, `/circle/note` with `(pitch, velocity)`; Max to app on 3335, `/circle/ready 1` heartbeat and repeated `/circle/feature` messages with `(channel, value)`. Feature channels are numbered 1–90: five adjacent groups of 18 in configured ratio order `1, 1.5, 2, 3, 4`, each group containing `Wr, E, W0, Asum, Abal, Phi, low[6], high[6]`. Python assembles a complete channel set by index before updating the readout, so message arrival order does not define feature order. Max samples at 500 ms intervals to keep readout traffic modest.
+`Circle/extras/circleApp_Surface.maxpat` is a separate host copied from `circleApp_cgsSynth.maxpat`; the original host patch is unchanged. The shared controller's added inputs are optional, and its default mode leaves the existing MIDI paths enabled. Gesture input uses the controller's existing TUIO receiver on UDP 3333. Keyboard OSC arrives on UDP 3334 as `/circle/note (pitch, velocity)`. The Surface host routes the message through `unpack 0. 0.` into separate float inlets on the existing note manager. Surface mode closes the Minilab's external MIDI note, pad, CC, and bend inputs. The host sends no telemetry or heartbeat back to the app.
 
-The keyboard OSC route is wired through the Surface host and existing note manager; the user has confirmed audible output. The Surface host sends `/circle/ready 1` to local UDP 3335 every 500 ms. The indexed feature telemetry path is wired in Max and Python, pending live validation. Keep X direct and compensate the app's TUIO Y values so the existing Max transform produces gesture-canvas height/width scaling. For canvas-normalized `y_canvas`, height `H`, and width `W`, send `y_tuio = 1 - (1 - y_canvas) * (H / W) / 1.42`.
+Keep X direct and compensate the app's TUIO Y values so the existing Max transform produces gesture-canvas height/width scaling. For canvas-normalized `y_canvas`, height `H`, and width `W`, send `y_tuio = 1 - (1 - y_canvas) * (H / W) / 1.42`.

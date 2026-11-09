@@ -27,6 +27,12 @@ from .cgs_plot import curve_points
 from .transport import FeatureTelemetry, MaxTransport
 
 
+# Current Surface bridge is one-way, so send without waiting for Max. Set this
+# to True later if the Max host restores a /circle/ready heartbeat; while True,
+# MaxTransport drops gesture and note events until that heartbeat is received.
+REQUIRE_MAX_HANDSHAKE = False
+
+
 class UiSignals(QObject):
     """Deliver receive-thread callbacks safely to the Qt UI thread."""
 
@@ -49,7 +55,11 @@ class GestureCanvas(QWidget):
         self._cgs_curve_path = QPainterPath()
         self._cgs_curve_points: tuple[tuple[float, float], ...] = ()
         self.last_xy: GesturePoint | None = None
-        self.max_status = "Waiting for Max heartbeat"
+        self.max_status = (
+            "Waiting for Max heartbeat"
+            if REQUIRE_MAX_HANDSHAKE
+            else "Max handshake disabled — output unconfirmed"
+        )
         self.gesture_status = "Gesture idle"
         self.telemetry = "No feature telemetry"
         self._pointer: object | None = None
@@ -174,8 +184,10 @@ class GestureCanvas(QWidget):
     def set_ready(self, ready: bool) -> None:
         if ready:
             self.max_status = "Max ready"
-        else:
+        elif REQUIRE_MAX_HANDSHAKE:
             self.max_status = "No Max heartbeat — drawing local; Max input paused"
+        else:
+            self.max_status = "Max status unchecked — sending without handshake"
         self.update()
 
     def set_features(self, telemetry: FeatureTelemetry) -> None:
@@ -354,10 +366,12 @@ class SurfaceWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Circle Surface")
         self.signals = UiSignals()
-        # Keep outgoing input gated until the Surface Max host is heartbeating.
+        # Keep the handshake switch explicit: the current Max patch sends no
+        # replies, so this must stay False for Surface input to reach Max.
         self.transport = MaxTransport(
             on_ready=self.signals.ready.emit,
             on_features=self.signals.features.emit,
+            require_ready=REQUIRE_MAX_HANDSHAKE,
         )
         self.signals.ready.connect(self._on_ready)
         self.signals.features.connect(self._on_features)
@@ -375,7 +389,11 @@ class SurfaceWindow(QMainWindow):
         self.raw_toggle = QCheckBox("Raw")
         self.raw_toggle.setChecked(True)
         self.cgs_toggle = QCheckBox("CGS")
-        self.max_status_label = QLabel("Waiting for Max heartbeat")
+        self.max_status_label = QLabel(
+            "Waiting for Max heartbeat"
+            if REQUIRE_MAX_HANDSHAKE
+            else "Handshake disabled"
+        )
         self.position_rate_label = QLabel("Position packets: 0/s")
         status_layout.addWidget(self.raw_toggle)
         status_layout.addWidget(self.cgs_toggle)
@@ -417,8 +435,16 @@ class SurfaceWindow(QMainWindow):
 
     def _on_ready(self, ready: bool) -> None:
         self.canvas.set_ready(ready)
-        self.max_status_label.setText("Max ready" if ready else "Max unavailable")
-        if self._last_ready and not ready and self.keyboard_model.active_pitch is not None:
+        if REQUIRE_MAX_HANDSHAKE:
+            self.max_status_label.setText("Max ready" if ready else "Max unavailable")
+        else:
+            self.max_status_label.setText("Max heartbeat received" if ready else "Handshake disabled")
+        if (
+            REQUIRE_MAX_HANDSHAKE
+            and self._last_ready
+            and not ready
+            and self.keyboard_model.active_pitch is not None
+        ):
             self.keyboard_model.stop()
             self.keyboard.update()
         self._last_ready = ready
