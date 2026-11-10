@@ -128,9 +128,8 @@ In order:
 2. Establish reliable communication between the PySide6 application and Max.
 3. Implement responsive touchscreen gesture input.
 4. Implement the on-screen keyboard.
-5. Display calculated CGL parameters.
-6. Add the two-ellipse visualisation.
-7. Evaluate the application on the Surface Pro 4 alongside the mechanical rig.
+5. Validate the Max telemetry readouts and two-ellipse reconstruction against a known synthetic gesture.
+6. Evaluate touch, pen, and sound response on the Surface Pro 4 alongside the mechanical rig.
 
 The immediate objective is a functional prototype that allows the physical interaction to be evaluated.
 
@@ -138,4 +137,4 @@ Do not prematurely implement the eventual Raspberry Pi, MCU, encoder or galvanom
 
 ## 9. Development Decisions for Surface App
 
-The Surface sound milestone uses a one-way app-to-Max bridge. The Surface host keeps the existing cgsSynth CGL, mapping, and audio chain; TUIO gestures use UDP 3333 and keyboard events use OSC `/circle/note (pitch, velocity)` on UDP 3334. Max unpacks pitch and velocity into separate float inputs for the existing note manager. The Surface host disables Minilab MIDI, pad, CC, and bend inputs. No Max-to-Surface telemetry or heartbeat is part of this milestone. The app's `REQUIRE_MAX_HANDSHAKE` switch is disabled by default and can be enabled when a Max ready heartbeat is restored.
+The Surface sound path keeps the existing cgsSynth CGL, mapping, and audio chain; TUIO gestures use UDP 3333 and keyboard events use OSC `/circle/note (pitch, velocity)` on UDP 3334. Max unpacks pitch and velocity into separate float inputs for the existing note manager. The Surface host disables Minilab MIDI, pad, CC, and bend inputs. A side tap of the controller's existing 90-channel feature output uses `mc.snapshot~ 100` to send `/circle/feature (channel, value)` at 10 Hz to UDP 3335; this does not modify the synth path. The stream contains no ready heartbeat. The app's `REQUIRE_MAX_HANDSHAKE` switch remains disabled by default and can be enabled when a Max ready heartbeat is restored.

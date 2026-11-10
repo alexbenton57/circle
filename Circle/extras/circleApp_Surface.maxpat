@@ -226,6 +226,93 @@
                     "patching_rect": [ 150.0, 356.0, 450.0, 42.0 ],
                     "text": "Surface mode disables Minilab MIDI, pad, CC and bend inputs."
                 }
+            },
+            {
+                "box": {
+                    "id": "obj-23",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 2,
+                    "patching_rect": [ 500.0, 520.0, 103.0, 22.0 ],
+                    "text": "mc.snapshot~ 100",
+                    "outlettype": [ "float", "int" ]
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-24",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "patching_rect": [ 685.0, 520.0, 26.0, 22.0 ],
+                    "text": "i",
+                    "outlettype": [ "int" ]
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-25",
+                    "maxclass": "newobj",
+                    "numinlets": 1,
+                    "numoutlets": 2,
+                    "patching_rect": [ 725.0, 520.0, 42.0, 22.0 ],
+                    "text": "t b f",
+                    "outlettype": [ "bang", "float" ]
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-26",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "patching_rect": [ 785.0, 520.0, 67.0, 22.0 ],
+                    "text": "pack 0 0.",
+                    "outlettype": [ "" ]
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-27",
+                    "maxclass": "newobj",
+                    "numinlets": 1,
+                    "numoutlets": 1,
+                    "patching_rect": [ 870.0, 520.0, 155.0, 22.0 ],
+                    "text": "prepend /circle/feature",
+                    "outlettype": [ "" ]
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-28",
+                    "maxclass": "newobj",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 1020.0, 520.0, 194.0, 22.0 ],
+                    "text": "udpsend 127.0.0.1 3335"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-29",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "linecount": 2,
+                    "patching_rect": [ 500.0, 560.0, 650.0, 38.0 ],
+                    "text": "10 Hz feature telemetry. route voice extracts the snapshot channel; send /circle/feature (channel, value) in the app's expected order."
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-30",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 2,
+                    "patching_rect": [ 610.0, 520.0, 67.0, 22.0 ],
+                    "text": "route voice",
+                    "outlettype": [ "", "" ]
+                }
             }
         ],
         "lines": [
@@ -382,6 +469,60 @@
                 "patchline": {
                     "source": [ "obj-21", 0 ],
                     "destination": [ "obj-2", 4 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-2", 2 ],
+                    "destination": [ "obj-23", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-23", 1 ],
+                    "destination": [ "obj-30", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-30", 0 ],
+                    "destination": [ "obj-24", 1 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-23", 0 ],
+                    "destination": [ "obj-25", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-25", 1 ],
+                    "destination": [ "obj-26", 1 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-25", 0 ],
+                    "destination": [ "obj-24", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-24", 0 ],
+                    "destination": [ "obj-26", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-26", 0 ],
+                    "destination": [ "obj-27", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [ "obj-27", 0 ],
+                    "destination": [ "obj-28", 0 ]
                 }
             }
         ],

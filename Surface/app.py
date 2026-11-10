@@ -23,13 +23,13 @@ from PySide6.QtWidgets import (
 )
 
 from .input_model import GestureInput, GesturePoint, LatchedKeyboard
-from .cgs_plot import curve_points
+from .cgs_plot import curve_points, plotter_parameters
 from .transport import FeatureTelemetry, MaxTransport
 
 
-# Current Surface bridge is one-way, so send without waiting for Max. Set this
-# to True later if the Max host restores a /circle/ready heartbeat; while True,
-# MaxTransport drops gesture and note events until that heartbeat is received.
+# Gesture and note input are sent without waiting for Max. Feature telemetry is
+# received independently; set this True only if Max later restores /circle/ready.
+# While True, MaxTransport drops gesture and note events until that heartbeat.
 REQUIRE_MAX_HANDSHAKE = False
 
 
@@ -191,20 +191,25 @@ class GestureCanvas(QWidget):
         self.update()
 
     def set_features(self, telemetry: FeatureTelemetry) -> None:
+        # Snapshot frames may continue arriving after a gesture ends. Keep the
+        # last valid plotter readout/curve until the next local gesture begins.
+        if not self.gesture.active:
+            return
         group = telemetry.active_group
         if group is None:
-            self.telemetry = "No active feature group"
-            self.set_cgs_curve(())
-        else:
-            low = ", ".join(f"{v:.3g}" for v in group.low)
-            high = ", ".join(f"{v:.3g}" for v in group.high)
-            self.telemetry = (
-                f"Wr {group.wr:.4g}   E {group.energy:.3g}   W0 {group.w0:.4g}   "
-                f"Asum {group.asum:.3g}   Abal {group.abal:.3g}   Phi {group.phi:.3g}\n"
-                f"Low [{low}]\nHigh [{high}]"
-            )
-            self.set_cgs_curve(curve_points(group))
-        self.update()
+            return
+        parameters = plotter_parameters(group)
+        points = curve_points(group)
+        if parameters is None or not points:
+            return
+        self.telemetry = (
+            f"N/M {parameters.numerator}/{parameters.denominator}  "
+            f"omega0 {parameters.omega0:.3g}  A0 {parameters.a0:.3g}  Ar {parameters.ar:.3g}\n"
+            f"S1 {parameters.s1:.3g} tau1 {parameters.tau1:.3g}  "
+            f"S2 {parameters.s2:.3g} tau2 {parameters.tau2:.3g}  "
+            f"phi {parameters.phi:.3g}  E {parameters.energy:.3g}"
+        )
+        self.set_cgs_curve(points)
 
     def set_show_raw_curve(self, visible: bool) -> None:
         self.show_raw_curve = visible
@@ -246,12 +251,13 @@ class GestureCanvas(QWidget):
         center_x = (x_min + x_max) / 2.0
         center_y = (y_min + y_max) / 2.0
         for index, (x, y) in enumerate(points):
-            nx = 0.5 + (x - center_x) * pixels_per_unit / self.width()
-            ny = 0.5 - (y - center_y) * pixels_per_unit / self.height()
+            # QPainterPath uses widget pixels here, not normalized coordinates.
+            px = self.width() * 0.5 + (x - center_x) * pixels_per_unit
+            py = self.height() * 0.5 - (y - center_y) * pixels_per_unit
             if index == 0:
-                path.moveTo(nx, ny)
+                path.moveTo(px, py)
             else:
-                path.lineTo(nx, ny)
+                path.lineTo(px, py)
         self._cgs_curve_path = path
 
     def paintEvent(self, _event: Any) -> None:

@@ -140,7 +140,20 @@ class FeatureAssembler:
         groups = []
         for start in range(0, self.CHANNEL_COUNT, self.GROUP_WIDTH):
             f = self._values[start : start + self.GROUP_WIDTH]
-            groups.append(FeatureGroup(f[0], f[1], f[2], f[3], f[4], f[5], tuple(f[6:12]), tuple(f[12:18])))
+            # Max's feature schema is E, Wr, W0, Asum, Abal, Phi, low[6], high[6].
+            # FeatureGroup keeps Wr first for convenient ratio handling.
+            groups.append(
+                FeatureGroup(
+                    wr=f[1],
+                    energy=f[0],
+                    w0=f[2],
+                    asum=f[3],
+                    abal=f[4],
+                    phi=f[5],
+                    low=tuple(f[6:12]),
+                    high=tuple(f[12:18]),
+                )
+            )
         self._seen.clear()
         return FeatureTelemetry(tuple(groups))
 
@@ -165,7 +178,19 @@ def parse_telemetry(address: str, args: tuple[int | float | str, ...]) -> bool |
         if any(not isinstance(value, (int, float)) for value in values):
             raise ValueError("feature group values must be numeric")
         f = tuple(float(value) for value in values)
-        groups.append(FeatureGroup(f[0], f[1], f[2], f[3], f[4], f[5], f[6:12], f[12:18]))
+        # Keep the positional Max schema explicit here too: E precedes Wr.
+        groups.append(
+            FeatureGroup(
+                wr=f[1],
+                energy=f[0],
+                w0=f[2],
+                asum=f[3],
+                abal=f[4],
+                phi=f[5],
+                low=f[6:12],
+                high=f[12:18],
+            )
+        )
     return FeatureTelemetry(tuple(groups))
 
 
