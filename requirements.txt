@@ -1,0 +1,4 @@
+# Dependencies for the Surface app and standalone CGL plotter.
+# The Max/MSP MCP server has its own environment and is intentionally excluded.
+-r Surface/requirements.txt
+-r 2Ellipse_plotter/requirements.txt
