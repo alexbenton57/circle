@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from .input_model import GestureInput, GesturePoint, LatchedKeyboard
-from .cgs_plot import curve_points, plotter_parameters
+from .cgs_plot import canvas_curve_points, curve_points, plotter_parameters
 from .transport import FeatureTelemetry, MaxTransport
 
 
@@ -226,34 +226,14 @@ class GestureCanvas(QWidget):
         self.update()
 
     def _rebuild_cgs_path(self) -> None:
-        """Fit the current world-coordinate curve with equal pixel scale."""
+        """Map the curve into the canvas at the same scale as raw input."""
         path = QPainterPath()
         points = self._cgs_curve_points
         if len(points) < 2 or self.width() <= 0 or self.height() <= 0:
             self._cgs_curve_path = path
             return
-
-        xs = [point[0] for point in points]
-        ys = [point[1] for point in points]
-        x_min, x_max = min(xs), max(xs)
-        y_min, y_max = min(ys), max(ys)
-        span_x, span_y = x_max - x_min, y_max - y_min
-        if span_x < 1e-12 and span_y < 1e-12:
-            self._cgs_curve_path = path
-            return
-        span_x = max(span_x, 1e-12)
-        span_y = max(span_y, 1e-12)
-        margin = 0.10
-        pixels_per_unit = min(
-            self.width() * (1.0 - 2.0 * margin) / span_x,
-            self.height() * (1.0 - 2.0 * margin) / span_y,
-        )
-        center_x = (x_min + x_max) / 2.0
-        center_y = (y_min + y_max) / 2.0
-        for index, (x, y) in enumerate(points):
-            # QPainterPath uses widget pixels here, not normalized coordinates.
-            px = self.width() * 0.5 + (x - center_x) * pixels_per_unit
-            py = self.height() * 0.5 - (y - center_y) * pixels_per_unit
+        canvas_points = canvas_curve_points(points, self.width(), self.height())
+        for index, (px, py) in enumerate(canvas_points):
             if index == 0:
                 path.moveTo(px, py)
             else:

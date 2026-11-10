@@ -44,7 +44,7 @@ As complete feature frames arrive during a local gesture, update the displayed p
 
 The phase and frequency conventions must be validated against a known synthetic gesture before treating the readouts as exact. The inverse shape conversion is unstable for `tau` near a perfect circle; the Cartesian values themselves remain well-behaved, but the UI should treat `tau` as immaterial near `|S| = 1`.
 
-The CGS curve is reconstructed for display in Python using the plotter's Model A ellipse equations and the selected highest-energy Max feature group. It is centered and fitted to the canvas with equal pixel scale. This renderer does not feed Max or perform CGL feature extraction. `Raw` and `CGS` visibility are controlled independently. The `Phi` phase convention still needs comparison against a known synthetic gesture in Max.
+The CGS curve is reconstructed for display in Python using the plotter's Model A ellipse equations and the selected highest-energy Max feature group. It is centered and mapped at the same scale as raw input: one Max X unit maps to the gesture-area width, with the vertical axis oriented for the Surface screen. This renderer does not feed Max or perform CGL feature extraction. `Raw` and `CGS` visibility are controlled independently. The `Phi` phase convention still needs comparison against a known synthetic gesture in Max.
 
 ## First sound milestone (completed)
 

@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from Surface.cgs_plot import curve_points, plotter_parameters
+from Surface.cgs_plot import canvas_curve_points, curve_points, plotter_parameters
 from Surface.transport import (
     FeatureAssembler,
     FeatureGroup,
@@ -119,6 +119,10 @@ class CurveReconstructionTests(unittest.TestCase):
         self.assertAlmostEqual(params.s2, self.s2)
         self.assertAlmostEqual(params.tau2, self.tau2)
         self.assertAlmostEqual(params.phi, 0.6)
+
+    def test_canvas_mapping_uses_gesture_scale_and_screen_y_direction(self) -> None:
+        mapped = canvas_curve_points(((-0.2, -0.1), (0.2, 0.1)), 1000, 600)
+        self.assertEqual(mapped, ((300.0, 200.0), (700.0, 400.0)))
 
     def test_curve_matches_model_a_equations(self) -> None:
         points = curve_points(self.group, sample_count=257)

@@ -84,12 +84,35 @@ def plotter_parameters(group: FeatureGroup) -> PlotterParameters | None:
     )
 
 
+def canvas_curve_points(
+    points: Sequence[tuple[float, float]], width: int, height: int
+) -> tuple[tuple[float, float], ...]:
+    """Map centered Model A points to pixels using the Surface input scale.
+
+    Surface sends X in canvas-width units and aspect-compensates Y by width as
+    well. The plotter's vertical axis is opposite the Surface screen trace, so
+    invert Y while mapping. Do not fit each curve to the viewport independently.
+    """
+    if not points or width <= 0 or height <= 0:
+        return ()
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    center_x = (min(xs) + max(xs)) / 2.0
+    center_y = (min(ys) + max(ys)) / 2.0
+    return tuple(
+        (
+            width * 0.5 + (x - center_x) * width,
+            height * 0.5 + (y - center_y) * width,
+        )
+        for x, y in points
+    )
+
+
 def curve_points(group: FeatureGroup, sample_count: int = 1200) -> tuple[tuple[float, float], ...]:
     """Return one closed Model A curve from a Max-derived feature group.
 
-    Points are in the renderer's world coordinates. The UI maps them into its
-    canvas with equal pixel scale. Empty output means the telemetry is not yet
-    sufficient for a meaningful curve.
+    Points are in the renderer's world coordinates. Empty output means the
+    telemetry is not yet sufficient for a meaningful curve.
     """
     if sample_count < 32:
         raise ValueError("sample_count must be at least 32")
